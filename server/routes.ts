@@ -104,21 +104,39 @@ export async function registerRoutes(
         return res.status(400).json({ error: 'Invalid file path' });
       }
 
-      const filePath = path.join(process.cwd(), 'uploads', 'converted', contentId, filename);
+      const relativePath = `uploads/converted/${contentId}/${filename}`;
+      const filePath = path.join(process.cwd(), relativePath);
 
-      if (!fs.existsSync(filePath)) {
-        console.error('[FileServe] File not found:', filePath);
-        return res.status(404).json({ error: 'File not found on server' });
+      // Local fallback for dev/cache
+      if (fs.existsSync(filePath)) {
+        const mimeType = mime.lookup(filename) || 'application/octet-stream';
+        res.setHeader('Content-Type', mimeType);
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        res.setHeader('Cache-Control', 'private, max-age=3600');
+        return res.sendFile(filePath);
       }
 
-      const mimeType = mime.lookup(filename) || 'application/octet-stream';
-
-      // Security headers
-      res.setHeader('Content-Type', mimeType);
-      res.setHeader('X-Content-Type-Options', 'nosniff');
-      res.setHeader('Cache-Control', 'private, max-age=3600');
-
-      return res.sendFile(filePath);
+      // Cloud Fallback for Production (Railway)
+      (async () => {
+        try {
+          const { isAzureConfigured, downloadBuffer } = await import('./services/blobStorage');
+          if (isAzureConfigured()) {
+            const blobPath = `converted/${contentId}/${filename}`;
+            console.log(`[FileServe] Fetching from Azure: ${blobPath}`);
+            const buffer = await downloadBuffer(blobPath);
+            if (buffer) {
+              const mimeType = mime.lookup(filename) || 'application/octet-stream';
+              res.setHeader('Content-Type', mimeType);
+              return res.send(buffer);
+            }
+          }
+          console.error('[FileServe] File not found local or cloud:', relativePath);
+          return res.status(404).json({ error: 'File not found' });
+        } catch (err) {
+          console.error('[FileServe] Cloud fallback error:', err);
+          return res.status(500).json({ error: 'Error retrieving file' });
+        }
+      })();
     }
   );
 
@@ -1042,6 +1060,19 @@ export async function registerRoutes(
 
         const useAzure = isAzureConfigured();
 
+        // ─── MIRROR ORIGINAL TO AZURE (Railway/Cloud Support) ─────────────
+        if (useAzure) {
+          try {
+            const originalBlobPath = `original/${contentId}/${file.originalname}`;
+            const fileBuffer = fs.readFileSync(file.path);
+            await azureUploadBuffer(originalBlobPath, fileBuffer, file.mimetype);
+            await storage.updateContentItem(contentId, { originalFilePath: originalBlobPath });
+            console.log(`[Conversion] ✅ Original mirrored to Azure: ${originalBlobPath}`);
+          } catch (e) {
+            console.error(`[Conversion] ❌ Failed to mirror original to Azure:`, e);
+          }
+        }
+
         const isPdfOrDoc =
           file.mimetype === 'application/pdf' ||
           file.mimetype.includes('wordprocessingml') ||
@@ -1106,6 +1137,7 @@ export async function registerRoutes(
               const transcriptText = generateTranscript(rawText, file.originalname);
               const transcriptBuffer = Buffer.from(transcriptText, 'utf-8');
               const transcriptPath = await saveFile('transcript.txt', transcriptBuffer, 'text/plain');
+              // Update BOTH availableFormats and transcriptPath column
               await updateItem({ transcriptPath, transcriptStatus: 'COMPLETED' });
               await patchAvailableFormats(contentId, 'transcript', transcriptPath, 'COMPLETED');
               console.log(`[Conversion] ✅ Transcript done for ${contentId}`);
@@ -1508,6 +1540,7 @@ export async function registerRoutes(
       if (!item) return res.status(404).json({ error: 'Content item not found' });
 
       const pathMap: Record<string, string | null> = {
+        original: (item as any).originalFilePath ?? null,
         transcript: (item as any).transcriptPath ?? null,
         simplified: (item as any).simplifiedPath ?? null,
         audio: (item as any).audioPath ?? null,
@@ -1528,13 +1561,12 @@ export async function registerRoutes(
         });
       }
 
-      // Check if this is an Azure blob path (starts with "converted/") 
-      // or a local path (starts with "uploads/")
-      const isAzurePath = filePath.startsWith('converted/');
+      // Check if this is an Azure blob path (starts with "converted/" or "original/")
+      const isAzurePath = filePath.startsWith('converted/') || filePath.startsWith('original/');
       const isLocalPath = filePath.startsWith('uploads/') || filePath.includes('\\');
 
       // PREFER LOCAL: check if the file actually exists on disk (fallback/dev mode)
-      const relativeLocalPath = filePath.startsWith('converted/') ? `uploads/${filePath}` : filePath;
+      const relativeLocalPath = isAzurePath ? `uploads/${filePath}` : filePath;
       const absoluteLocalPath = path.join(process.cwd(), relativeLocalPath);
 
       if (fs.existsSync(absoluteLocalPath)) {
@@ -1544,26 +1576,24 @@ export async function registerRoutes(
       }
 
       if (isAzurePath) {
-        // Azure: generate public URL (container has public blob access)
-        const { getBlobUrl } = await import('./services/blobStorage');
-        const url = getBlobUrl(filePath);
-        if (shouldRedirect === 'true') return res.redirect(url);
-        return res.json({ url, source: 'azure' });
+        // Azure: generate SIGNED URL for private containers
+        const { isAzureConfigured, getSignedUrl } = await import('./services/blobStorage');
+        if (isAzureConfigured()) {
+          const url = await getSignedUrl(filePath, 2); // 2 hour expiry
+          if (shouldRedirect === 'true') return res.redirect(url);
+          return res.json({ url, source: 'azure' });
+        }
       }
 
       if (isLocalPath) {
         // Local: serve the file directly from disk via a signed server route
-        // Return a server-relative URL that our /api/content/file/* endpoint will serve
         const normalizedPath = filePath.replace(/\\\\/g, '/').replace(/^.*uploads\//, 'uploads/');
         const url = `/api/content/file/${normalizedPath}`;
         if (shouldRedirect === 'true') return res.redirect(url);
-        return res.json({
-          url,
-          source: 'local'
-        });
+        return res.json({ url, source: 'local' });
       }
 
-      return res.status(400).json({ error: 'Unrecognized file path format' });
+      return res.status(404).json({ error: 'File not found on local or cloud storage' });
 
     } catch (err: any) {
       console.error('[FormatURL] Error:', err.message);

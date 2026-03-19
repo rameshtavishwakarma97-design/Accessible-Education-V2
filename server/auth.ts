@@ -3,6 +3,10 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 
 const JWT_SECRET = process.env.SESSION_SECRET || "dev-secret-change-in-production";
+
+if (process.env.NODE_ENV === "production" && JWT_SECRET === "dev-secret-change-in-production") {
+  console.warn("⚠️ WARNING: Using default SESSION_SECRET in production. This is insecure!");
+}
 const JWT_EXPIRY = "7d";
 
 export interface AuthPayload {

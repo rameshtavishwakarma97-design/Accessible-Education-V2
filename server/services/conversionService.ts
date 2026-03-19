@@ -74,7 +74,7 @@ export async function generateSimplifiedText(
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
 
     const prompt = `You are an accessibility assistant. 
 Rewrite the following document text in plain, simple English 

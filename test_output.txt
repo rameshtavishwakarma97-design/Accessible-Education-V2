@@ -1,0 +1,16 @@
+
+Running 4 tests using 4 workers
+
+[1A[2K[1/4] [chromium] ΓÇ║ tests\admin.spec.ts:64:3 ΓÇ║ Module 8: Admin ΓÇ║ Tables paginate correctly
+[1A[2K[2/4] [chromium] ΓÇ║ tests\admin.spec.ts:24:3 ΓÇ║ Module 8: Admin ΓÇ║ Create a new user
+[1A[2K[3/4] [chromium] ΓÇ║ tests\admin.spec.ts:14:3 ΓÇ║ Module 8: Admin ΓÇ║ Admin dashboard loads and shows stats
+[1A[2K[4/4] [chromium] ΓÇ║ tests\admin.spec.ts:57:3 ΓÇ║ Module 8: Admin ΓÇ║ Compliance report / Analytics cards
+
+[1A[2K[WebServer] 
+[WebServer] A PostCSS plugin did not pass the `from` option to `postcss.parse`. This may cause imported assets to be incorrectly transformed. If you've recently added a PostCSS plugin that raised this warning, please contact the package author to fix the issue.
+[1A[2K  4 passed (23.8s)
+
+To open last HTML report run:
+[36m[39m
+[36m  npx playwright show-report[39m
+[36m[39m

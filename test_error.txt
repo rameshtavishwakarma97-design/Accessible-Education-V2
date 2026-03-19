@@ -1,0 +1,31 @@
+
+Running 5 tests using 1 worker
+
+Γ£ô Created test file: automated-test-content.txt
+Γ£ô Logged in as teacher
+Γ£ô Course offering ID: co4
+  Γ£ÿ  1 [chromium] ΓÇ║ tests\automated-fix-tests.spec.ts:50:3 ΓÇ║ Automated Fix Verification Tests ΓÇ║ Issue 1,2,3: Upload file, verify conversion, and test format serving (5.8s)
+  -  2 [chromium] ΓÇ║ tests\automated-fix-tests.spec.ts:201:3 ΓÇ║ Automated Fix Verification Tests ΓÇ║ Issue 1: Uploaded content appears on student dashboard
+  -  3 [chromium] ΓÇ║ tests\automated-fix-tests.spec.ts:227:3 ΓÇ║ Automated Fix Verification Tests ΓÇ║ Issue 4: Audio player has Spotify-style controls
+  -  4 [chromium] ΓÇ║ tests\automated-fix-tests.spec.ts:274:3 ΓÇ║ Automated Fix Verification Tests ΓÇ║ Issue 5: Reading progress bar works correctly
+  -  5 [chromium] ΓÇ║ tests\automated-fix-tests.spec.ts:321:3 ΓÇ║ Automated Fix Verification Tests ΓÇ║ Issue 6: Font size slider changes text size in real-time
+
+
+  1) [chromium] ΓÇ║ tests\automated-fix-tests.spec.ts:50:3 ΓÇ║ Automated Fix Verification Tests ΓÇ║ Issue 1,2,3: Upload file, verify conversion, and test format serving 
+
+    Error: ENOENT: no such file or directory, stat 'C:\Users\Rames\Desktop\Folders\Term 3\Maker Lab\Accessible-Education-V3\automated-test-content.txt'
+
+      103 |       page.click('[data-testid="button-browse-file"]')
+      104 |     ]);
+    > 105 |     await fileChooser.setFiles(TEST_FILE_NAME);
+          |     ^
+      106 |
+      107 |     // Final Upload
+      108 |     await page.click('[data-testid="button-upload-convert"]');
+        at C:\Users\Rames\Desktop\Folders\Term 3\Maker Lab\Accessible-Education-V3\tests\automated-fix-tests.spec.ts:105:5
+
+    Error Context: test-results\automated-fix-tests-Automa-2b8fa-ion-and-test-format-serving-chromium\error-context.md
+
+  1 failed
+    [chromium] ΓÇ║ tests\automated-fix-tests.spec.ts:50:3 ΓÇ║ Automated Fix Verification Tests ΓÇ║ Issue 1,2,3: Upload file, verify conversion, and test format serving 
+  4 did not run
