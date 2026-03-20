@@ -143,30 +143,38 @@ export default function VoiceCommandEngine({
       // Playback — only on content viewer
       case "PLAY":
       case "PAUSE":
-        if (isContentViewer && onPlayPause) return onPlayPause();
+        window.dispatchEvent(new CustomEvent("voice-command-viewer", { detail: { action } }));
+        if (isContentViewer) return showFeedback(action);
         return showFeedback("NOT_ON_VIEWER");
       case "SPEED_UP":
-        if (isContentViewer && onSpeedUp) return onSpeedUp();
+        window.dispatchEvent(new CustomEvent("voice-command-viewer", { detail: { action: "SPEED_UP" } }));
+        if (isContentViewer) return showFeedback("SPEED_UP");
         return showFeedback("NOT_ON_VIEWER");
       case "SLOW_DOWN":
-        if (isContentViewer && onSlowDown) return onSlowDown();
+        window.dispatchEvent(new CustomEvent("voice-command-viewer", { detail: { action: "SLOW_DOWN" } }));
+        if (isContentViewer) return showFeedback("SLOW_DOWN");
         return showFeedback("NOT_ON_VIEWER");
 
       // Format switching — only on content viewer
       case "FORMAT_AUDIO":
-        if (isContentViewer && onFormatChange) return onFormatChange("audio");
+        window.dispatchEvent(new CustomEvent("voice-command-viewer", { detail: { action: "FORMAT", format: "audio" } }));
+        if (isContentViewer) return showFeedback("FORMAT_AUDIO");
         return showFeedback("NOT_ON_VIEWER");
       case "FORMAT_TEXT":
-        if (isContentViewer && onFormatChange) return onFormatChange("original");
+        window.dispatchEvent(new CustomEvent("voice-command-viewer", { detail: { action: "FORMAT", format: "original" } }));
+        if (isContentViewer) return showFeedback("FORMAT_TEXT");
         return showFeedback("NOT_ON_VIEWER");
       case "FORMAT_SIMPLIFIED":
-        if (isContentViewer && onFormatChange) return onFormatChange("simplified");
+        window.dispatchEvent(new CustomEvent("voice-command-viewer", { detail: { action: "FORMAT", format: "simplified" } }));
+        if (isContentViewer) return showFeedback("FORMAT_SIMPLIFIED");
         return showFeedback("NOT_ON_VIEWER");
       case "FORMAT_ORIGINAL":
-        if (isContentViewer && onFormatChange) return onFormatChange("original");
+        window.dispatchEvent(new CustomEvent("voice-command-viewer", { detail: { action: "FORMAT", format: "original" } }));
+        if (isContentViewer) return showFeedback("FORMAT_ORIGINAL");
         return showFeedback("NOT_ON_VIEWER");
       case "FORMAT_HC":
-        if (isContentViewer && onFormatChange) return onFormatChange("high_contrast");
+        window.dispatchEvent(new CustomEvent("voice-command-viewer", { detail: { action: "FORMAT", format: "high_contrast" } }));
+        if (isContentViewer) return showFeedback("FORMAT_HC");
         return showFeedback("NOT_ON_VIEWER");
 
       // Navigation — works everywhere

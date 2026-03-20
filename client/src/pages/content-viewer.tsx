@@ -430,6 +430,36 @@ export default function ContentViewer() {
     loadFormatContent(selectedFormat);
   }, [ci, selectedFormat, id]);
 
+  // --- Voice Command Listener ---
+  useEffect(() => {
+    const handleVoiceCommand = (e: any) => {
+      const { action, format } = e.detail;
+      if (action === "PLAY") {
+        if (!playing) {
+          if (audioScript) speak(audioScript);
+          else if (blobContent) speak(blobContent);
+        }
+      } else if (action === "PAUSE") {
+        if (playing) {
+          window.speechSynthesis.cancel();
+          setPlaying(false);
+        }
+      } else if (action === "SPEED_UP") {
+        setPlaybackSpeed(p => Math.min(2, p + 0.25));
+      } else if (action === "SLOW_DOWN") {
+        setPlaybackSpeed(p => Math.max(0.25, p - 0.25));
+      } else if (action === "FORMAT" && format) {
+        // Translate format names to match state expectations if necessary
+        const targetFormat = format === 'audio' ? 'transcript' : format; 
+        setSelectedFormat(targetFormat);
+      }
+    };
+    
+    window.addEventListener("voice-command-viewer", handleVoiceCommand);
+    return () => window.removeEventListener("voice-command-viewer", handleVoiceCommand);
+  }, [playing, audioScript, blobContent, speak]);
+
+
   if (isLoading) {
     return (
       <div className="flex flex-col h-full">
