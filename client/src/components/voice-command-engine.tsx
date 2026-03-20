@@ -81,6 +81,8 @@ export default function VoiceCommandEngine({
   useEffect(() => {
     if (!isSupported || !isEnabled) return;
 
+    let isActive = true;
+
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
@@ -101,6 +103,7 @@ export default function VoiceCommandEngine({
     recognition.onerror = (event: any) => {
       if (event.error === "not-allowed") {
         setFeedback("🚫 Mic permission denied — check browser settings");
+        isActive = false;
       } else if (event.error === "network") {
         setFeedback("🌐 Network error — voice recognition needs internet");
       } else if (event.error !== "no-speech") {
@@ -109,19 +112,35 @@ export default function VoiceCommandEngine({
     };
 
     recognition.onend = () => {
+      setIsListening(false);
       // Auto-restart if still enabled (keeps listening continuously)
-      if (isEnabled) recognition.start();
+      if (isActive) {
+        setTimeout(() => {
+          if (isActive) {
+            try {
+              recognition.start();
+              setIsListening(true);
+            } catch (err) {}
+          }
+        }, 250);
+      }
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
-    setIsListening(true);
+    
+    try {
+      recognition.start();
+      setIsListening(true);
+    } catch (err) {}
 
     return () => {
-      recognition.stop();
+      isActive = false;
+      try {
+        recognition.stop();
+      } catch (err) {}
       setIsListening(false);
     };
-  }, [isEnabled]);
+  }, [isEnabled, isSupported]);
 
   // ── Command handler ──────────────────────────────────────
   const handleCommand = (transcript: string) => {
