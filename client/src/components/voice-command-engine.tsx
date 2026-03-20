@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useLocation } from "wouter";
 import { Mic, MicOff } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
@@ -77,73 +77,109 @@ export default function VoiceCommandEngine({
     setIsSupported(!!SR);
   }, []);
 
+  // ── Stable ref for command handler (avoids stale closures) ──
+  const handleCommandRef = useRef<(transcript: string) => void>(() => {});
+
   // ── Setup recognition ────────────────────────────────────
   useEffect(() => {
     if (!isSupported || !isEnabled) return;
-
-    let isActive = true;
 
     const SpeechRecognition =
       (window as any).SpeechRecognition ||
       (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = false;
-    recognition.lang = "en-IN"; // Indian English
+    let isActive = true;
+    let currentRecognition: any = null;
+    let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+    let lastResultTime = Date.now();
 
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[event.results.length - 1][0].transcript
-        .trim()
-        .toLowerCase();
-      handleCommand(transcript);
+    // Reset the watchdog — if no result arrives in 45s, force a restart
+    const resetWatchdog = () => {
+      if (watchdogTimer) clearTimeout(watchdogTimer);
+      lastResultTime = Date.now();
+      watchdogTimer = setTimeout(() => {
+        if (isActive && Date.now() - lastResultTime >= 44000) {
+          // Force-kill and recreate
+          try { currentRecognition?.stop(); } catch {}
+          setTimeout(() => { if (isActive) startFreshSession(); }, 300);
+        }
+      }, 45000);
     };
 
-    recognition.onerror = (event: any) => {
-      if (event.error === "not-allowed") {
-        setFeedback("🚫 Mic permission denied — check browser settings");
-        isActive = false;
-      } else if (event.error === "network") {
-        setFeedback("🌐 Network error — voice recognition needs internet");
-      } else if (event.error !== "no-speech") {
+    // Create a fresh recognition object each time
+    const startFreshSession = () => {
+      if (!isActive) return;
+
+      // Kill previous instance cleanly
+      if (currentRecognition) {
+        try { currentRecognition.onend = null; currentRecognition.stop(); } catch {}
+      }
+
+      const r = new SpeechRecognition();
+      r.continuous = true;
+      r.interimResults = false;
+      r.lang = "en-IN";
+      r.maxAlternatives = 1;
+
+      r.onresult = (event: any) => {
+        const transcript = event.results[event.results.length - 1][0].transcript
+          .trim()
+          .toLowerCase();
+        // Always call the LATEST handler via ref (no stale closures)
+        handleCommandRef.current(transcript);
+        resetWatchdog();
+      };
+
+      r.onerror = (event: any) => {
+        if (event.error === "not-allowed") {
+          setFeedback("🚫 Mic permission denied — check browser settings");
+          isActive = false;
+          return;
+        }
+        if (event.error === "network") {
+          setFeedback("🌐 Network error — retrying...");
+        }
+        // For all other errors (no-speech, aborted, etc.) let onend handle restart
+      };
+
+      r.onend = () => {
         setIsListening(false);
+        // Auto-restart with a FRESH instance
+        if (isActive) {
+          setTimeout(() => {
+            if (isActive) startFreshSession();
+          }, 300);
+        }
+      };
+
+      currentRecognition = r;
+      recognitionRef.current = r;
+
+      try {
+        r.start();
+        setIsListening(true);
+        resetWatchdog();
+      } catch {
+        // If start fails, retry after a short delay
+        setTimeout(() => { if (isActive) startFreshSession(); }, 1000);
       }
     };
 
-    recognition.onend = () => {
-      setIsListening(false);
-      // Auto-restart if still enabled (keeps listening continuously)
-      if (isActive) {
-        setTimeout(() => {
-          if (isActive) {
-            try {
-              recognition.start();
-              setIsListening(true);
-            } catch (err) {}
-          }
-        }, 250);
-      }
-    };
-
-    recognitionRef.current = recognition;
-    
-    try {
-      recognition.start();
-      setIsListening(true);
-    } catch (err) {}
+    startFreshSession();
 
     return () => {
       isActive = false;
-      try {
-        recognition.stop();
-      } catch (err) {}
+      if (watchdogTimer) clearTimeout(watchdogTimer);
+      if (currentRecognition) {
+        try { currentRecognition.onend = null; currentRecognition.stop(); } catch {}
+      }
       setIsListening(false);
     };
   }, [isEnabled, isSupported]);
 
   // ── Command handler ──────────────────────────────────────
-  const handleCommand = (transcript: string) => {
+  const handleCommand = useCallback((transcript: string) => {
     for (const cmd of COMMANDS) {
       const matched = cmd.keywords.some((kw) => transcript.includes(kw));
       if (matched) {
@@ -153,7 +189,12 @@ export default function VoiceCommandEngine({
         return;
       }
     }
-  };
+  }, []);
+
+  // Keep the ref always pointing to the latest handler
+  useEffect(() => {
+    handleCommandRef.current = handleCommand;
+  });
 
   const executeAction = (action: string) => {
     // ── Role-aware prefix for dashboard routes ──
